@@ -1,0 +1,104 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Represents a physical location where events are held.
+model Venue {
+  id        String   @id @default(cuid())
+  name      String
+  city      String
+  address   String
+  capacity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  events    Event[]
+
+  @@index([city])
+}
+
+// Represents a scheduled happening at a venue.
+model Event {
+  id          String        @id @default(cuid())
+  venueId     String
+  venue       Venue         @relation(fields: [venueId], references: [id])
+  title       String
+  category    EventCategory
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime
+  status      EventStatus   @default(SCHEDULED)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  tiers       TicketTier[]
+
+  @@index([venueId])
+  @@index([startsAt])
+  @@index([category])
+}
+
+// Represents a pricing tier for tickets to an event.
+model TicketTier {
+  id            String    @id @default(cuid())
+  eventId       String
+  event         Event     @relation(fields: [eventId], references: [id])
+  name          String
+  priceMinor    Int
+  currency      String    @db.Char(3)
+  quantityTotal Int
+  quantitySold  Int       @default(0)
+  salesEndAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  bookings      Booking[]
+
+  @@index([eventId])
+}
+
+// Represents a customer's ticket booking against a specific tier.
+model Booking {
+  id            String        @id @default(cuid())
+  tierId        String
+  tier          TicketTier    @relation(fields: [tierId], references: [id])
+  customerName  String
+  customerEmail String
+  quantity      Int
+  totalMinor    Int
+  currency      String        @db.Char(3)
+  status        BookingStatus @default(CONFIRMED)
+  reference     String        @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([tierId])
+  @@index([customerEmail])
+}
+
+enum EventCategory {
+  CONCERT
+  COMEDY
+  CONFERENCE
+  SPORTS
+  THEATRE
+}
+
+enum EventStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
