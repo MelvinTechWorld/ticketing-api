@@ -1,29 +1,23 @@
 import { z } from "zod";
 import { config } from "@/lib/config";
 
-// ── Allowed sort fields & directions ───────────────────────────────────
-
-const eventSortFields = ["startsAt", "title", "createdAt"] as const;
-export type EventSortField = (typeof eventSortFields)[number];
+// ── Sort directions (shared) ───────────────────────────────────────────
 
 const sortDirections = ["asc", "desc"] as const;
 export type SortDirection = (typeof sortDirections)[number];
 
-// ── Shared pagination schema ───────────────────────────────────────────
+// ── Base pagination schema (no sortBy – each resource adds its own) ────
 
 /**
- * Reusable pagination + sorting query schema.
+ * Base pagination schema with limit clamping, offset validation,
+ * and sort direction. Each resource extends this with its own `sortBy`.
  *
  * Behaviour:
- *   • `limit` is coerced to a number, defaults to 20, and is **clamped**
- *     to `config.pagination.maxLimit` (values above 100 → 100).
- *   • `offset` is coerced to a number, defaults to 0, and **rejects**
- *     negative values with a descriptive error.
- *   • `sortBy` must be one of the allowed enum values; unknown values
- *     produce a clear 400 message.
+ *   • `limit` defaults to 20, clamped to max 100.
+ *   • `offset` defaults to 0, rejects negative values.
  *   • `sortDirection` must be "asc" or "desc".
  */
-export const paginationSchema = z.object({
+export const basePaginationSchema = z.object({
   limit: z.coerce
     .number()
     .int({ message: "limit must be an integer" })
@@ -37,12 +31,6 @@ export const paginationSchema = z.object({
     .min(0, { message: "offset must not be negative" })
     .default(config.pagination.defaultOffset),
 
-  sortBy: z
-    .enum(eventSortFields, {
-      error: `sortBy must be one of: ${eventSortFields.join(", ")}`,
-    })
-    .default("startsAt"),
-
   sortDirection: z
     .enum(sortDirections, {
       error: "sortDirection must be one of: asc, desc",
@@ -50,9 +38,10 @@ export const paginationSchema = z.object({
     .default("asc"),
 });
 
-export type PaginationQuery = z.infer<typeof paginationSchema>;
+// ── Event sort fields & query schema ───────────────────────────────────
 
-// ── Event-specific filters ─────────────────────────────────────────────
+const eventSortFields = ["startsAt", "title", "createdAt"] as const;
+export type EventSortField = (typeof eventSortFields)[number];
 
 const eventCategories = [
   "CONCERT",
@@ -62,7 +51,13 @@ const eventCategories = [
   "THEATRE",
 ] as const;
 
-export const eventsQuerySchema = paginationSchema.extend({
+export const eventsQuerySchema = basePaginationSchema.extend({
+  sortBy: z
+    .enum(eventSortFields, {
+      error: `sortBy must be one of: ${eventSortFields.join(", ")}`,
+    })
+    .default("startsAt"),
+
   category: z
     .enum(eventCategories, {
       error: `category must be one of: ${eventCategories.join(", ")}`,
@@ -73,3 +68,20 @@ export const eventsQuerySchema = paginationSchema.extend({
 });
 
 export type EventsQuery = z.infer<typeof eventsQuerySchema>;
+
+// ── Venue sort fields & query schema ───────────────────────────────────
+
+const venueSortFields = ["name", "capacity", "createdAt"] as const;
+export type VenueSortField = (typeof venueSortFields)[number];
+
+export const venuesQuerySchema = basePaginationSchema.extend({
+  sortBy: z
+    .enum(venueSortFields, {
+      error: `sortBy must be one of: ${venueSortFields.join(", ")}`,
+    })
+    .default("name"),
+
+  city: z.string().min(1, { message: "city must not be empty" }).optional(),
+});
+
+export type VenuesQuery = z.infer<typeof venuesQuerySchema>;
